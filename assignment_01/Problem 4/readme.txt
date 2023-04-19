@@ -1,0 +1,1 @@
+Run ee243_hw_p3.ipynb in google colab or jupyter.
