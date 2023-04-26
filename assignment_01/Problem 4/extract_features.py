@@ -1,3 +1,4 @@
+import copy
 import scipy.io as sio
 import torch.cuda
 import torchvision
@@ -5,6 +6,8 @@ from models.alexnet import alexnet
 from models.vgg import vgg16
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
+from torch import linalg as la
+import os
 
 
 def main():
@@ -72,26 +75,71 @@ def main():
     sio.savemat('alexnet.mat', mdict={'feature': alex_feature.numpy(), 'label': alex_label.numpy()})
 
 
-# def KNN_test(train_mat_file, test_data, K=1):
-#     # FILL IN TO LOAD THE SAVED .MAT FILE
-#     vgg_mat =
-#     alex_mat =
-#
-#     vgg16_extractor =
-#     alex_extractor =
-#
-#     for idx, data in enumerate(test_data):
-#         # 1. # EXTRACT FEATURES USING THE MODELS - ALEXNET AND VGG16
-#         F_test_vgg16 =
-#         F_test_alex =
-#
-#         # 2. # FIND NEAREST NEIGHBOUR OF THIS FEATURE FROM FEATURES STORED IN ALEXNET.MAT AND VGG16.MAT
-#
-#         # 3. # COMPUTE ACCURACY
-#         alex_accuracy = 0.0
-#         vgg16_accuracy = 0.0
-#
-#         return vgg16_accuracy, alex_accuracy
+def _find_nn(feature, train_features):
+    copy_feature = feature.repeat(train_features.size(0), 1).to('cpu')
+
+    dist = train_features - copy_feature
+    dist = la.norm(dist, dim=1)
+
+    return torch.argmin(dist)
+
+
+def KNN_test(train_math_path, test_loader):
+    PRETRAINED = True
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+    # FILL IN TO LOAD THE SAVED .MAT FILE
+    vgg_mat = sio.loadmat(os.path.join(train_math_path, 'vgg16.mat'))
+    alex_mat = sio.loadmat(os.path.join(train_math_path, 'alexnet.mat'))
+
+    vgg_train_features = torch.from_numpy(vgg_mat['feature'])
+    vgg_train_labels = torch.from_numpy(vgg_mat['label']).squeeze()
+
+    alex_train_features = torch.from_numpy(alex_mat['feature'])
+    alex_train_labels = torch.from_numpy(alex_mat['label']).squeeze()
+
+    vgg16_extractor = vgg16(pretrained=PRETRAINED).to(device)
+    vgg16_extractor.eval()
+
+    alex_extractor = alexnet(pretrained=PRETRAINED).to(device)
+    alex_extractor.eval()
+
+    alex_count, vgg_count = 0, 0
+    total_sample = 0
+    with torch.no_grad():
+        for idx, data in enumerate(test_loader):
+            image, label = data
+            image, label = image.to(device), label.to(device)
+
+            total_sample = total_sample + label.size(0)
+
+            # 1. # EXTRACT FEATURES USING THE MODELS - ALEXNET AND VGG16
+            F_test_vgg16 = vgg16_extractor(image)
+            F_test_alex = alex_extractor(image)
+
+            # 2. # FIND NEAREST NEIGHBOUR OF THIS FEATURE FROM FEATURES STORED IN ALEXNET.MAT AND VGG16.MAT
+            for feat_idx, test_feature in enumerate(F_test_vgg16):
+                neigh_tensor = _find_nn(test_feature, vgg_train_features)
+                if label[feat_idx] == vgg_train_labels[neigh_tensor]:
+                    vgg_count = vgg_count + 1
+
+            for feat_idx, test_feature in enumerate(F_test_alex):
+                neigh_tensor = _find_nn(test_feature, alex_train_features)
+                if label[feat_idx] == alex_train_labels[neigh_tensor]:
+                    alex_count = alex_count + 1
+
+            print('iter: {}, total evaluated sample: {}, curr vgg acc: {}, curr alex acc: {}'.format(idx + 1,
+                                                                                                     total_sample,
+                                                                                                     vgg_count /
+                                                                                                     total_sample,
+                                                                                                     alex_count /
+                                                                                                     total_sample))
+
+    # 3. # COMPUTE ACCURACY
+    alex_accuracy = alex_count / total_sample
+    vgg16_accuracy = vgg_count / total_sample
+
+    return vgg16_accuracy, alex_accuracy
 
 
 if __name__ == "__main__":
