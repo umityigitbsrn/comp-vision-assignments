@@ -133,3 +133,4 @@ dmypy.json
 **/data/
 **/*.mat
 **/DEL_*
+**/tiny-UCF101/
