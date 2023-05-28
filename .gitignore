@@ -134,3 +134,4 @@ dmypy.json
 **/*.mat
 **/DEL_*
 **/tiny-UCF101/
+**/Models
