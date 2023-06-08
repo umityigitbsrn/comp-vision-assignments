@@ -135,3 +135,4 @@ dmypy.json
 **/DEL_*
 **/tiny-UCF101/
 **/Models
+**/.DS_Store
